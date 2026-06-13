@@ -1,0 +1,9 @@
+{
+  "name": "levraipnf-backend",
+  "version": "1.0.0",
+  "description": "Backend API pour LeVraiPNF",
+  "dependencies": {
+    "stripe": "^14.0.0",
+    "node-fetch": "^3.3.0"
+  }
+}
