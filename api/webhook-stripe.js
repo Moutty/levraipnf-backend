@@ -68,7 +68,7 @@ module.exports = async (req, res) => {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${PRINTFUL_KEY}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          external_id: session.id,
+          external_id: session.id.substring(0, 32),
           shipping: 'STANDARD',
           recipient: {
             name,
