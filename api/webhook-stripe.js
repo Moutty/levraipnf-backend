@@ -9,8 +9,6 @@ module.exports = async (req, res) => {
     let event;
     if (req.body && typeof req.body === 'object') {
       event = req.body;
-    } else if (req.body && typeof req.body === 'string') {
-      event = JSON.parse(req.body);
     } else {
       const rawBody = await new Promise((resolve, reject) => {
         let data = '';
@@ -22,13 +20,13 @@ module.exports = async (req, res) => {
     }
 
     console.log('Event type:', event.type);
-    console.log('Payment status:', event.data?.object?.payment_status);
 
     if (event.type === 'checkout.session.completed' && event.data?.object?.payment_status === 'paid') {
       const session = event.data.object;
       const cart = JSON.parse(session.metadata?.cart || '[]');
-      const shipping = session.shipping_details?.address;
-      const name = session.shipping_details?.name || '';
+      const shippingData = session.shipping_details || session.customer_details;
+      const shipping = shippingData?.address;
+      const name = shippingData?.name || session.metadata?.customerName || '';
 
       console.log('Cart:', JSON.stringify(cart));
       console.log('Shipping:', JSON.stringify(shipping));
@@ -40,24 +38,29 @@ module.exports = async (req, res) => {
 
       const items = [];
       for (const item of cart) {
-        if (item.variationId) {
-          items.push({ sync_variant_id: item.variationId, quantity: item.qty });
-        } else if (item.productId) {
-          const r = await fetch(`https://api.printful.com/sync/products/${item.productId}`, {
-            headers: { 'Authorization': `Bearer ${PRINTFUL_KEY}` }
-          });
-          const d = await r.json();
-          const variants = d.result?.sync_variants || [];
-          if (variants.length > 0) {
-            items.push({ sync_variant_id: variants[0].id, quantity: item.qty });
-          }
+        const varId = item.variationId && item.variationId !== '' ? item.variationId : null;
+        const prodId = item.productId && item.productId !== '' ? item.productId : null;
+
+        if (varId) {
+          items.push({ sync_variant_id: parseInt(varId), quantity: item.qty });
+        } else if (prodId) {
+          try {
+            const r = await fetch(`https://api.printful.com/sync/products/${prodId}`, {
+              headers: { 'Authorization': `Bearer ${PRINTFUL_KEY}` }
+            });
+            const d = await r.json();
+            const variants = d.result?.sync_variants || [];
+            if (variants.length > 0) {
+              items.push({ sync_variant_id: variants[0].id, quantity: item.qty });
+            }
+          } catch(e) { console.error('variants error:', e); }
         }
       }
 
       console.log('Items:', JSON.stringify(items));
 
       if (items.length === 0) {
-        console.error('No items');
+        console.error('No valid items');
         return res.status(200).json({ received: true });
       }
 
@@ -67,13 +70,21 @@ module.exports = async (req, res) => {
         body: JSON.stringify({
           external_id: session.id,
           shipping: 'STANDARD',
-          recipient: { name, email: session.customer_email || '', address1: shipping.line1, city: shipping.city, zip: shipping.postal_code, country_code: shipping.country || 'FR' },
+          recipient: {
+            name,
+            email: session.customer_email || '',
+            address1: shipping.line1 || '',
+            address2: shipping.line2 || '',
+            city: shipping.city || '',
+            zip: shipping.postal_code || '',
+            country_code: shipping.country || 'FR',
+          },
           items,
         }),
       });
 
       const orderData = await orderRes.json();
-      console.log('Printful response:', JSON.stringify(orderData));
+      console.log('Printful result:', JSON.stringify(orderData));
 
       if (orderData.result?.id) {
         await fetch(`https://api.printful.com/orders/${orderData.result.id}/confirm`, {
