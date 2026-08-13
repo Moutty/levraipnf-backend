@@ -1,3 +1,4 @@
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const PRINTFUL_KEY = process.env.PRINTFUL_API_KEY;
 
 module.exports = async (req, res) => {
@@ -5,20 +6,23 @@ module.exports = async (req, res) => {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  try {
-    let event;
-    if (req.body && typeof req.body === 'object') {
-      event = req.body;
-    } else {
-      const rawBody = await new Promise((resolve, reject) => {
-        let data = '';
-        req.on('data', chunk => { data += chunk; });
-        req.on('end', () => resolve(data));
-        req.on('error', reject);
-      });
-      event = JSON.parse(rawBody);
-    }
+  const rawBody = await new Promise((resolve, reject) => {
+    let data = '';
+    req.on('data', chunk => { data += chunk; });
+    req.on('end', () => resolve(data));
+    req.on('error', reject);
+  });
 
+  let event;
+  try {
+    const sig = req.headers['stripe-signature'];
+    event = stripe.webhooks.constructEvent(rawBody, sig, process.env.STRIPE_WEBHOOK_SECRET);
+  } catch (err) {
+    console.error('Webhook signature verification failed:', err.message);
+    return res.status(400).json({ error: 'Invalid signature' });
+  }
+
+  try {
     console.log('Event type:', event.type);
 
     if (event.type === 'checkout.session.completed' && event.data?.object?.payment_status === 'paid') {
@@ -101,3 +105,5 @@ module.exports = async (req, res) => {
     return res.status(200).json({ received: true });
   }
 };
+
+module.exports.config = { api: { bodyParser: false } };
