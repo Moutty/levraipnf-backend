@@ -29,8 +29,8 @@ module.exports = async (req, res) => {
     lineItems.push({
       price_data: {
         currency: 'eur',
-        product_data: { name: 'Livraison France' },
-        unit_amount: 500,
+        product_data: { name: 'Livraison' },
+        unit_amount: 0,
       },
       quantity: 1,
     });
