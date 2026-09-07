@@ -28,7 +28,7 @@ module.exports = async (req, res) => {
     const itemCount = cart.reduce((sum, item) => sum + (parseInt(item.qty, 10) || 1), 0);
 
     return res.status(200).json({
-      orderRef: session.id.substring(0, 32),
+      orderRef: session.metadata?.orderRef || session.id.substring(0, 32),
       itemCount,
       amountTotal: session.amount_total,
       currency: session.currency,

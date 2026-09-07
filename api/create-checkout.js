@@ -1,4 +1,5 @@
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const crypto = require('crypto');
 
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -30,10 +31,15 @@ module.exports = async (req, res) => {
 
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://levraipnf.store';
 
+    const now = new Date();
+    const ymd = String(now.getUTCFullYear()).slice(-2) + String(now.getUTCMonth() + 1).padStart(2, '0') + String(now.getUTCDate()).padStart(2, '0');
+    const orderRef = `PNF-${ymd}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
+
     const session = await stripe.checkout.sessions.create({
       payment_method_types: [paymentMethod === 'paypal' ? 'paypal' : 'card'],
       line_items: lineItems,
       mode: 'payment',
+      allow_promotion_codes: true,
       success_url: `${siteUrl}?payment=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${siteUrl}?payment=cancelled`,
       customer_email: customer?.email || undefined,
@@ -49,7 +55,8 @@ module.exports = async (req, res) => {
           size: i.size || 'ONE SIZE',
           color: i.color || ''
         }))),
-        customerName: customer?.name || ''
+        customerName: customer?.name || '',
+        orderRef
       },
       locale: 'fr',
     });
