@@ -32,21 +32,25 @@ module.exports = async (req, res) => {
     // Chercher par external_id (= Stripe session ID) ou par ID Printful
     let orderData = null;
 
-    // Essayer d'abord par external_id
-    const searchRes = await fetch(`https://api.printful.com/orders?external_id=${orderId}`, {
-      headers: { 'Authorization': `Bearer ${PRINTFUL_KEY}` }
-    });
-    const searchData = await searchRes.json();
+    // Printful: un External ID se récupère avec @ devant l'identifiant.
+    // Le webhook utilise les 32 premiers caractères du Stripe Checkout session ID.
+    const rawId = String(orderId).trim();
+    const candidates = [];
 
-    if (searchData.result && searchData.result.length > 0) {
-      orderData = searchData.result[0];
-    } else {
-      // Essayer par ID direct
-      const directRes = await fetch(`https://api.printful.com/orders/${orderId}`, {
+    if (rawId.startsWith('cs_')) candidates.push('@' + rawId.substring(0, 32));
+    if (rawId.startsWith('@')) candidates.push(rawId);
+    else if (!/^\d+$/.test(rawId)) candidates.push('@' + rawId);
+    if (/^\d+$/.test(rawId)) candidates.push(rawId);
+
+    for (const id of [...new Set(candidates)]) {
+      const directRes = await fetch(`https://api.printful.com/orders/${encodeURIComponent(id)}`, {
         headers: { 'Authorization': `Bearer ${PRINTFUL_KEY}` }
       });
       const directData = await directRes.json();
-      if (directData.result) orderData = directData.result;
+      if (directData.result) {
+        orderData = directData.result;
+        break;
+      }
     }
 
     if (!orderData) {
@@ -62,8 +66,10 @@ module.exports = async (req, res) => {
       service: s.service,
       trackingNumber: s.tracking_number,
       trackingUrl: s.tracking_url,
-      shippedAt: s.shipped_at,
+      shippedAt: s.shipped_at || s.created || null,
+      shipDate: s.ship_date || null,
       estimatedDelivery: s.estimated_delivery_dates?.max || null,
+      reshipment: Boolean(s.reshipment),
     }));
 
     return res.status(200).json({

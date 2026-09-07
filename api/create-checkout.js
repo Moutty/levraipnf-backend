@@ -8,7 +8,7 @@ module.exports = async (req, res) => {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
-    const { cart, customer } = req.body;
+    const { cart, customer, paymentMethod } = req.body;
     if (!cart || cart.length === 0) return res.status(400).json({ error: 'Panier vide' });
 
     const lineItems = cart.map(item => {
@@ -26,19 +26,12 @@ module.exports = async (req, res) => {
       };
     });
 
-    lineItems.push({
-      price_data: {
-        currency: 'eur',
-        product_data: { name: 'Livraison' },
-        unit_amount: 0,
-      },
-      quantity: 1,
-    });
+
 
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://levraipnf.store';
 
     const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
+      payment_method_types: [paymentMethod === 'paypal' ? 'paypal' : 'card'],
       line_items: lineItems,
       mode: 'payment',
       success_url: `${siteUrl}?payment=success&session_id={CHECKOUT_SESSION_ID}`,
