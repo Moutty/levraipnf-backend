@@ -36,7 +36,8 @@ module.exports = async (req, res) => {
     const orderRef = `PNF-${ymd}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
 
     const session = await stripe.checkout.sessions.create({
-      payment_method_types: [paymentMethod === 'paypal' ? 'paypal' : 'card'],
+      // Laisser Stripe choisir dynamiquement les moyens activés dans le Dashboard
+      // (carte bancaire, PayPal, etc.) au lieu de forcer un seul moyen.
       line_items: lineItems,
       mode: 'payment',
       allow_promotion_codes: true,
